@@ -23,8 +23,8 @@ sudo apt-get install redis-server
 pip install redis
 ```
 ```
+git clone —recursive https://github.com/ChangerC77/gello_software-main.git
 cd ~/gello_software-main
-git init
 git submodule init
 git submodule update
 pip install -r requirements.txt

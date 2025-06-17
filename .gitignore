@@ -2,7 +2,6 @@
 # keep each item within the sections alphabetical
 
 # large files
-*.png
 *.gif
 
 # mac
