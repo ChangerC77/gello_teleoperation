@@ -20,7 +20,7 @@ from gello.data_utils.format_obs import save_frame
 from gello.env import RobotEnv
 from gello.robots.robot import PrintRobot
 from gello.zmq_core.robot_node import ZMQClientRobot
-
+import math
 
 def print_color(*args, color=None, attrs=(), **kwargs):
     import termcolor
@@ -47,6 +47,23 @@ class Args:
     data_dir: str = "~/bc_data"
     bimanual: bool = False
     verbose: bool = False
+
+def normalize_angle(theta):
+    """
+    将任意角度映射到 [-π, π] 范围内，保持物理意义不变。
+    适用于 θ ∈ [-2π, 2π]。
+    """
+    # while theta > 2 * math.pi:
+    #     theta -= 2 * math.pi
+    
+    # while theta < -2 * math.pi:
+    #     theta += 2 * math.pi
+    if theta < -math.pi:
+        return theta + 2 * math.pi
+    elif theta > math.pi:
+        return theta - 2 * math.pi
+    else:
+        return theta
 
 
 def main(args):
@@ -128,7 +145,8 @@ def main(args):
             else:
                 reset_joints = args.start_joints
             agent = GelloAgent(port=gello_port, start_joints=args.start_joints)
-            curr_joints = env.get_obs()["joint_positions"]
+            curr_joints = env.get_obs()["joint_positions"]  # xarm joints
+            print(f"follower xarm joints: {curr_joints}")
             if reset_joints.shape == curr_joints.shape:
                 max_delta = (np.abs(curr_joints - reset_joints)).max()
                 steps = min(int(max_delta / 0.01), 100)
@@ -153,18 +171,27 @@ def main(args):
 
     # going to start position
     print("Going to start position")
-    start_pos = agent.act(env.get_obs())
-    obs = env.get_obs()
-    joints = obs["joint_positions"]
+    start_pos = agent.act(env.get_obs())  # gello
 
+    # 限位处理：让 start_pos 的每个值回到 [-2π, 2π] 范围内
+    for i in range(len(start_pos)):
+        angle = start_pos[i]
+        angle = normalize_angle(angle)
+        start_pos[i] = angle
+    print(f"leader joints: {start_pos}")
+
+    obs = env.get_obs() # xarm
+    joints = obs["joint_positions"]
     abs_deltas = np.abs(start_pos - joints)
     id_max_joint_delta = np.argmax(abs_deltas)
 
+    # 检查误差是否过大
     max_joint_delta = 0.8
     if abs_deltas[id_max_joint_delta] > max_joint_delta:
         id_mask = abs_deltas > max_joint_delta
         print()
         ids = np.arange(len(id_mask))[id_mask]
+
         for i, delta, joint, current_j in zip(
             ids,
             abs_deltas[id_mask],
@@ -185,6 +212,12 @@ def main(args):
     for _ in range(25):
         obs = env.get_obs()
         command_joints = agent.act(obs)
+
+        for i in range(len(command_joints)):
+            angle = command_joints[i]
+            angle = normalize_angle(angle)
+            command_joints[i] = angle
+
         current_joints = obs["joint_positions"]
         delta = command_joints - current_joints
         max_joint_delta = np.abs(delta).max()
@@ -195,6 +228,12 @@ def main(args):
     obs = env.get_obs()
     joints = obs["joint_positions"]
     action = agent.act(obs)
+    
+    for i in range(len(action)):
+        angle = action[i]
+        angle = normalize_angle(angle)
+        action[i] = angle
+    
     if (action - joints > 0.5).any():
         print("Action is too big")
 
@@ -230,6 +269,11 @@ def main(args):
             flush=True,
         )
         action = agent.act(obs)
+        for i in range(len(action)):
+            angle = action[i]
+            angle = normalize_angle(angle)
+            action[i] = angle
+        
         #添加打印
         r.publish('gripper_channel', f"{action[7]:.2f}")
         #print(f"Action at step: {action[7]:.2f}")
