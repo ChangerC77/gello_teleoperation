@@ -7,7 +7,10 @@ import numpy as np
 from pyquaternion import Quaternion
 
 from gello.robots.robot import Robot
-
+import os, sys
+home_dir = os.path.expanduser('~')  # 获取用户家目录
+prometheus_dir = os.path.join(home_dir, 'Prometheus')  # 构建 ~/Prometheus 路径
+sys.path.append(prometheus_dir)  # 添加到 Python 路径
 
 def _aa_from_quat(quat: np.ndarray) -> np.ndarray:
     """Convert a quaternion to an axis-angle representation.
@@ -160,9 +163,11 @@ class XArmRobot(Robot):
         self.real = real
         self.max_delta = max_delta
         if real:
+            sys.path.append(os.path.join(os.path.expanduser('~'), 'Prometheus', 'xArm-Python-SDK'))
             from xarm.wrapper import XArmAPI
 
             self.robot = XArmAPI(ip, is_radian=True)
+            self.robot.set_tcp_load(2, [0, 0, 0])  # set TCP load
         else:
             self.robot = None
 
